@@ -2,80 +2,105 @@ import threading
 import asyncio
 import concurrent.futures
 import time
+import urllib.request
+import hashlib
 
 # ==========================================
-# 1. ตัวอย่าง Threading (เหมาะกับงานรอ I/O เช่น ดาวน์โหลดไฟล์)
+# 1. Threading: เช็คสถานะเว็บไซต์ (Uptime Checker)
+# เหมาะกับ I/O Bound: โยน Request ไปพร้อมๆ กันแล้วรอ Server ตอบกลับ
 # ==========================================
-def io_bound_task_thread(task_id):
-    print(f"[Thread] กำลังทำงานที่ {task_id}...")
-    time.sleep(2) # จำลองการรอ (หน่วงเวลา 2 วินาที)
-    print(f"[Thread] งานที่ {task_id} เสร็จสิ้น!")
+URLS = ['https://google.com', 'https://github.com', 'https://python.org', 'http://example.com']
+
+def check_url(url):
+    try:
+        req = urllib.request.urlopen(url, timeout=3)
+        print(f"[Threading] 🌐 {url} -> ออนไลน์ (Status: {req.getcode()})")
+    except Exception:
+        print(f"[Threading] ❌ {url} -> ออฟไลน์/ไม่สามารถเข้าถึงได้")
 
 def run_threading():
-    print("--- เริ่มทดสอบ Threading ---")
-    start_time = time.time()
+    print("--- 1. เริ่มทำงาน Threading (Website Checker) ---")
+    start = time.time()
     threads = []
     
-    # สร้าง 5 Threads ให้ทำงานพร้อมกัน
-    for i in range(1, 6):
-        t = threading.Thread(target=io_bound_task_thread, args=(i,))
+    for url in URLS:
+        t = threading.Thread(target=check_url, args=(url,))
         threads.append(t)
         t.start()
         
     for t in threads:
         t.join() # รอให้ทุก Thread ทำงานเสร็จ
         
-    print(f"Threading ใช้เวลาทั้งหมด: {time.time() - start_time:.2f} วินาที\n")
+    print(f"✅ Threading ใช้เวลา: {time.time() - start:.2f} วินาที\n")
 
 # ==========================================
-# 2. ตัวอย่าง Asyncio (เหมาะกับงานรอ I/O ที่มีปริมาณมากๆ ประหยัดทรัพยากร)
+# 2. Asyncio: สแกนพอร์ตเครือข่าย (Port Scanner)
+# เหมาะกับ I/O Bound ที่ต้องการ Concurrency สูงๆ (เปิด Connection จำนวนมาก)
 # ==========================================
-async def io_bound_task_async(task_id):
-    print(f"[Asyncio] กำลังทำงานที่ {task_id}...")
-    await asyncio.sleep(2) # ใช้ await สลับการทำงานให้ตัวอื่นทำต่อระหว่างรอ
-    print(f"[Asyncio] งานที่ {task_id} เสร็จสิ้น!")
+TARGET_HOST = 'example.com'
+PORTS_TO_SCAN = [21, 22, 80, 443, 8080]
+
+async def check_port(host, port):
+    try:
+        # พยายามเชื่อมต่อไปยัง Host และ Port ที่ระบุ
+        conn = asyncio.open_connection(host, port)
+        reader, writer = await asyncio.wait_for(conn, timeout=1.5)
+        print(f"[Asyncio] 🔓 พอร์ต {port} บน {host} -> เปิด (OPEN)")
+        writer.close()
+        await writer.wait_closed()
+    except Exception:
+        print(f"[Asyncio] 🔒 พอร์ต {port} บน {host} -> ปิด (CLOSED)")
 
 async def run_asyncio():
-    print("--- เริ่มทดสอบ Asyncio ---")
-    start_time = time.time()
+    print("--- 2. เริ่มทำงาน Asyncio (Port Scanner) ---")
+    start = time.time()
     
-    # รวบรวมงาน 5 งานให้ทำงานพร้อมกัน
-    tasks = [io_bound_task_async(i) for i in range(1, 6)]
+    # รวบรวมงานสแกนทุกพอร์ตให้ทำงานพร้อมกัน
+    tasks = [check_port(TARGET_HOST, port) for port in PORTS_TO_SCAN]
     await asyncio.gather(*tasks)
     
-    print(f"Asyncio ใช้เวลาทั้งหมด: {time.time() - start_time:.2f} วินาที\n")
+    print(f"✅ Asyncio ใช้เวลา: {time.time() - start:.2f} วินาที\n")
 
 # ==========================================
-# 3. ตัวอย่าง Process Pool (เหมาะกับงานที่ใช้ CPU คำนวณหนักๆ)
+# 3. Process Pool: จำลองการแคร็กรหัส / Proof-of-Work
+# เหมาะกับ CPU Bound: ใช้ CPU คำนวณรหัส Hash หนักๆ เต็มสปีดทุกคอร์
 # ==========================================
-def cpu_bound_task(task_id):
-    print(f"[Process Pool] กำลังคำนวณงานที่ {task_id}...")
-    # จำลองการใช้ CPU คำนวณเยอะๆ
-    count = 0
-    for i in range(10**7): 
-        count += 1
-    print(f"[Process Pool] งานที่ {task_id} เสร็จสิ้น!")
-    return count
+def mine_hash(worker_id, difficulty):
+    print(f"[Process Pool] 💻 Worker {worker_id} เริ่มคำนวณหา Hash ที่ขึ้นต้นด้วย '0' {difficulty} ตัว...")
+    nonce = 0
+    prefix = '0' * difficulty
+    
+    while True:
+        # นำ ID และตัวเลข nonce มาต่อกันแล้วเข้ารหัส MD5
+        text = f"worker{worker_id}_{nonce}".encode()
+        hash_result = hashlib.md5(text).hexdigest()
+        
+        # ถ้าหา Hash ที่ขึ้นต้นด้วย 00000 เจอ ถือว่าสำเร็จ
+        if hash_result.startswith(prefix):
+            print(f"[Process Pool] 🎉 Worker {worker_id} สำเร็จ! Nonce: {nonce} -> Hash: {hash_result}")
+            return nonce
+        nonce += 1
 
 def run_process_pool():
-    print("--- เริ่มทดสอบ Process Pool ---")
-    start_time = time.time()
+    print("--- 3. เริ่มทำงาน Process Pool (Hash Mining) ---")
+    start = time.time()
     
-    # กระจายงานไปยัง CPU Cores ต่างๆ
+    # แตก Process ไปยัง CPU cores ต่างๆ รัน 4 ตัวพร้อมกัน
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        executor.map(cpu_bound_task, range(1, 6))
+        # ตั้งความยากที่ 5 (หา Hash ที่ขึ้นต้นด้วย 00000)
+        futures = [executor.submit(mine_hash, i, 5) for i in range(1, 5)]
         
-    print(f"Process Pool ใช้เวลาทั้งหมด: {time.time() - start_time:.2f} วินาที\n")
+        for future in concurrent.futures.as_completed(futures):
+            future.result() # รอผลลัพธ์จากแต่ละ worker
+            
+    print(f"✅ Process Pool ใช้เวลา: {time.time() - start:.2f} วินาที\n")
 
 # ==========================================
 # ส่วนเรียกใช้งานหลัก
 # ==========================================
 if __name__ == "__main__":
-    # รันทดสอบทีละแบบ
+    print("🚀 เริ่มโปรแกรม Network & Security Toolkit...\n")
+    
     run_threading()
-    
-    # รัน asyncio
     asyncio.run(run_asyncio())
-    
-    # รัน Process Pool (บน Windows ต้องอยู่ใน if __name__ == "__main__" เสมอ)
     run_process_pool()
